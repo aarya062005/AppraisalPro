@@ -21,8 +21,8 @@ export default function SelfAssessment() {
         setReviewer(latest.managerEmail || "--");
 
         const s = latest.appraisalStatus;
-        if (s === "SUBMITTED" || s === "APPROVED") setStatus("Submitted");
-        else if (s === "IN_REVIEW") setStatus("In Review");
+        if (s === "APPROVED" || s === "ACKNOWLEDGED") setStatus("Submitted");
+        else if (s === "SELF_SUBMITTED" || s === "MANAGER_DRAFT" || s === "MANAGER_REVIEWED") setStatus("In Review");
         else setStatus("Pending");
       }
     }).catch(console.error);

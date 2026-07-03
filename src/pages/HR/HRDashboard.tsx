@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axiosInstance from "../../api/axiosInstance";
 
 type AppraisalStatus = "EMPLOYEE_DRAFT" | "SELF_SUBMITTED" | "MANAGER_DRAFT" | "MANAGER_REVIEWED" | "ACKNOWLEDGED" | "APPROVED" | "PENDING";
@@ -20,7 +21,7 @@ const STATUS_STYLES: Record<string, string> = {
   ACKNOWLEDGED: "bg-purple-500/10 text-purple-400 border-purple-500/20",
   EMPLOYEE_DRAFT: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   MANAGER_DRAFT: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  MANAGER_REVIEWED: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+  MANAGER_REVIEWED: "bg-teal-500/10 text-teal-400 border-teal-500/20",
   PENDING: "bg-white/[0.06] text-[#9ca3af] border-white/[0.08]",
   APPROVED: "bg-green-500/10 text-green-400 border-green-500/20",
 };
@@ -30,10 +31,17 @@ const STATUS_LABELS: Record<string, string> = {
   ACKNOWLEDGED: "Acknowledged",
   EMPLOYEE_DRAFT: "Employee Draft",
   MANAGER_DRAFT: "Manager Draft",
-  MANAGER_REVIEWED: "Manager_Reviewed",
+  MANAGER_REVIEWED: "Manager Reviewed",
   PENDING: "Pending",
   APPROVED: "Approved",
 };
+
+const TrashIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+    <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4M6.5 7.5v4M9.5 7.5v4M3.5 4l.6 8.4a1 1 0 001 .9h5.8a1 1 0 001-.9L13.5 4"
+      stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 function StatusBadge({ status }: { status: string }) {
   return (
@@ -62,32 +70,53 @@ function FilterSelect({ label, options, value, onChange }: {
 }
 
 export default function HRDashboard() {
+  const navigate = useNavigate();
   const [appraisals, setAppraisals] = useState<Appraisal[]>([]);
   const [activeEmployees, setActiveEmployees] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [statusFilter, setStatusFilter] = useState("All statuses");
   const [cycleFilter, setCycleFilter] = useState("All cycles");
 
+  const fetchData = async () => {
+    try {
+      const [appraisalsRes, usersRes] = await Promise.all([
+        axiosInstance.get("/api/appraisals"),
+        axiosInstance.get("/api/users"),
+      ]);
+      setAppraisals(appraisalsRes.data);
+      const active = usersRes.data.filter((u: any) => u.isActive).length;
+      setActiveEmployees(active);
+    } catch (err) {
+      setError("Failed to load data. Make sure backend is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [appraisalsRes, usersRes] = await Promise.all([
-          axiosInstance.get("/api/appraisals"),
-          axiosInstance.get("/api/users"),
-        ]);
-        setAppraisals(appraisalsRes.data);
-        const active = usersRes.data.filter((u: any) => u.isActive).length;
-        setActiveEmployees(active);
-      } catch (err) {
-        setError("Failed to load data. Make sure backend is running.");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
+
+  const handleApprove = async (id: number) => {
+    if (!window.confirm("Approve this appraisal?")) return;
+    try {
+      await axiosInstance.patch(`/api/appraisals/${id}/approve`);
+      await fetchData();
+    } catch {
+      alert("Failed to approve. Appraisal must be in MANAGER_REVIEWED status.");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Delete this appraisal? This cannot be undone.")) return;
+    try {
+      await axiosInstance.delete(`/api/appraisals/${id}`);
+      setAppraisals((prev) => prev.filter((a) => a.appraisalId !== id));
+    } catch {
+      alert("Cannot delete — only PENDING appraisals can be deleted.");
+    }
+  };
 
   const filtered = appraisals.filter((a) => {
     const statusOk = statusFilter === "All statuses" || a.appraisalStatus === statusFilter;
@@ -96,13 +125,13 @@ export default function HRDashboard() {
   });
 
   const uniqueCycles = [...new Set(appraisals.map((a) => a.cycleName))];
-  const pendingCount = appraisals.filter((a) => a.appraisalStatus === "PENDING").length;
-  const approvedCount = appraisals.filter((a) => a.appraisalStatus === "APPROVED").length;
+  const pendingApprovalCount = appraisals.filter((a) => a.appraisalStatus === "MANAGER_REVIEWED").length;
+  const approvedCount = appraisals.filter((a) => a.appraisalStatus === "APPROVED" || a.appraisalStatus === "ACKNOWLEDGED").length;
 
   const STATS = [
     { label: "Active Employees", value: activeEmployees },
     { label: "Total Appraisals", value: appraisals.length },
-    { label: "Pending Approval", value: pendingCount },
+    { label: "Pending Approval", value: pendingApprovalCount },
     { label: "Completed", value: approvedCount },
   ];
 
@@ -201,9 +230,32 @@ export default function HRDashboard() {
                     </td>
                     <td className="px-5 py-3.5 text-[#9ca3af]">{formatDate(row.createdAt)}</td>
                     <td className="px-5 py-3.5">
-                      <button className="px-3 py-1.5 rounded-lg border border-white/[0.08] text-[#9ca3af] text-xs font-medium hover:bg-white/[0.04] hover:text-white transition-all">
-                        View
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {/* Approve — only active when MANAGER_REVIEWED */}
+                        <button
+                          onClick={() => handleApprove(row.appraisalId)}
+                          disabled={row.appraisalStatus !== "MANAGER_REVIEWED"}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            row.appraisalStatus === "MANAGER_REVIEWED"
+                              ? "border-green-500/30 text-green-400 hover:bg-green-500/10 cursor-pointer"
+                              : "border-white/[0.06] text-[#4b5563] cursor-not-allowed"
+                          }`}
+                        >
+                          Approve
+                        </button>
+                        {/* Delete — only allowed on PENDING appraisals */}
+                        <button
+                          onClick={() => handleDelete(row.appraisalId)}
+                          disabled={row.appraisalStatus !== "PENDING"}
+                          className={`flex items-center justify-center w-8 h-8 rounded-lg border transition-all ${
+                            row.appraisalStatus === "PENDING"
+                              ? "border-white/[0.08] text-[#9ca3af] hover:bg-red-500/10 hover:border-red-500/20 hover:text-red-400 cursor-pointer"
+                              : "border-white/[0.04] text-[#374151] cursor-not-allowed"
+                          }`}
+                        >
+                          <TrashIcon />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

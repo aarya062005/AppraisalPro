@@ -1,18 +1,25 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import axiosInstance from "../../api/axiosInstance";
 
-const profile = {
-  firstName: "Doremon",
-  lastName: "",
-  designation: "Team Lead",
-  role: "Manager",
-  department: "MERN Stack",
-  manager: "Aarya Sharma",
-  email: "doremon@gmail.com",
-  phone: "9876543211",
-  memberSince: "10 Jan 2023",
-  userId: "#1005",
-  lastUpdated: "12 Jun 2026",
-  status: "Active",
+interface UserProfile {
+  UserId: number;
+  firstName: string;
+  lastName: string;
+  role: string;
+  email: string;
+  phone: string;
+  designation: string;
+  managerName: string | null;
+  deptName: string | null;
+  isActive: boolean;
+  CreatedAt: string;
+  UpdatedAt: string;
+}
+
+const formatDate = (value: string | undefined) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 };
 
 const InfoField = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
@@ -24,10 +31,53 @@ const InfoField = ({ label, value, highlight }: { label: string; value: string; 
 
 export default function ManagerProfile() {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const userId = localStorage.getItem("userId");
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!userId) {
+        setError("No user is logged in.");
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await axiosInstance.get(`/api/users/${userId}`);
+        setProfile(res.data);
+      } catch {
+        setError("Failed to load profile.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [userId]);
 
   const handleLogout = () => {
+    localStorage.removeItem("userId");
+    localStorage.removeItem("firstName");
+    localStorage.removeItem("role");
+    localStorage.removeItem("isAuthenticated");
     navigate("/");
   };
+
+  if (loading) {
+    return (
+      <div className="w-full flex items-center justify-center h-64">
+        <p className="text-[#6b7280]">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="w-full flex items-center justify-center h-64">
+        <p className="text-red-400">{error || "Profile not found."}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -48,7 +98,7 @@ export default function ManagerProfile() {
           {/* Name & Role */}
           <div className="text-center">
             <p className="text-white font-semibold text-base">{profile.firstName} {profile.lastName}</p>
-            <p className="text-[#6b7280] text-sm mt-0.5">{profile.designation}</p>
+            <p className="text-[#6b7280] text-sm mt-0.5">{profile.designation || "—"}</p>
             <span className="mt-2 inline-block bg-purple-500/10 text-purple-400 border border-purple-500/20 text-xs font-medium px-3 py-1 rounded-lg uppercase tracking-wider">
               {profile.role}
             </span>
@@ -65,11 +115,11 @@ export default function ManagerProfile() {
             </div>
             <div>
               <p className="text-[#6b7280] text-xs uppercase tracking-widest mb-1">Phone</p>
-              <p className="text-white text-sm">{profile.phone}</p>
+              <p className="text-white text-sm">{profile.phone || "—"}</p>
             </div>
             <div>
               <p className="text-[#6b7280] text-xs uppercase tracking-widest mb-1">Member Since</p>
-              <p className="text-white text-sm">{profile.memberSince}</p>
+              <p className="text-white text-sm">{formatDate(profile.CreatedAt)}</p>
             </div>
           </div>
 
@@ -101,10 +151,10 @@ export default function ManagerProfile() {
             <div className="grid grid-cols-2 gap-3">
               <InfoField label="First Name" value={profile.firstName} />
               <InfoField label="Last Name" value={profile.lastName} />
-              <InfoField label="Designation" value={profile.designation} />
+              <InfoField label="Designation" value={profile.designation || "—"} />
               <InfoField label="Role" value={profile.role.toUpperCase()} />
-              <InfoField label="Department" value={profile.department} />
-              <InfoField label="Manager" value={profile.manager} />
+              <InfoField label="Department" value={profile.deptName || "—"} />
+              <InfoField label="Manager" value={profile.managerName || "—"} />
             </div>
           </div>
 
@@ -112,10 +162,10 @@ export default function ManagerProfile() {
           <div className="bg-[#1e2029] border border-white/[0.06] rounded-xl px-5 py-5">
             <p className="text-[#6b7280] text-xs uppercase tracking-widest mb-4">Account Information</p>
             <div className="grid grid-cols-2 gap-3">
-              <InfoField label="User ID" value={profile.userId} />
-              <InfoField label="Member Since" value={profile.memberSince} />
-              <InfoField label="Last Updated" value={profile.lastUpdated} />
-              <InfoField label="Status" value={profile.status} highlight />
+              <InfoField label="User ID" value={`#${profile.UserId}`} />
+              <InfoField label="Member Since" value={formatDate(profile.CreatedAt)} />
+              <InfoField label="Last Updated" value={formatDate(profile.UpdatedAt)} />
+              <InfoField label="Status" value={profile.isActive ? "Active" : "Inactive"} highlight={profile.isActive} />
             </div>
           </div>
         </div>

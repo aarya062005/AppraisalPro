@@ -1,65 +1,140 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axiosInstance from "../../api/axiosInstance";
 
-type GoalStatus = "Not Started" | "In Progress" | "Submitted" | "Completed" | "Not Completed" | "Cancelled";
-
-interface Goal {
-  id: number;
-  title: string;
-  appraisal: string;
-  dueDate: string;
-  daysLeft: number | null;
-  status: GoalStatus;
-}
-
-const initialGoals: Goal[] = [
-  { id: 1, title: "Improve team velocity by 15%", appraisal: "2026 Annual Review", dueDate: "30 Jun 2026", daysLeft: 8, status: "In Progress" },
-  { id: 2, title: "Complete leadership training", appraisal: "2026 Annual Review", dueDate: "20 Jul 2026", daysLeft: 28, status: "Not Started" },
-  { id: 3, title: "Grow team to 4 members", appraisal: "2025 Annual Review", dueDate: "30 Sept 2025", daysLeft: null, status: "Completed" },
-];
-
-const statusStyles: Record<GoalStatus, string> = {
-  "In Progress": "bg-blue-500/10 text-blue-400 border border-blue-500/20",
-  "Not Started": "bg-[#2a2d3a] text-[#6b7280] border border-white/[0.06]",
-  "Submitted": "bg-purple-500/10 text-purple-400 border border-purple-500/20",
-  "Completed": "bg-green-500/10 text-green-400 border border-green-500/20",
-  "Not Completed": "bg-red-500/10 text-red-400 border border-red-500/20",
-  "Cancelled": "bg-[#2a2d3a] text-[#6b7280] border border-white/[0.06]",
+// ─── API Calls ───────────────────────────────────────
+const fetchGoalsByEmployee = async (employeeId: number) => {
+  const response = await axiosInstance.get(`/api/goals/employee/${employeeId}`);
+  return response.data;
 };
 
-const filters: ("All" | GoalStatus)[] = ["All", "Not Started", "In Progress", "Submitted", "Completed", "Not Completed", "Cancelled"];
+const submitGoalCompletion = async (goalId: number, completed: boolean, note: string) => {
+  const response = await axiosInstance.patch(
+    `/api/goals/${goalId}/submit?completed=${completed}${
+      note ? `&note=${encodeURIComponent(note)}` : ""
+    }`
+  );
+  return response.data;
+};
+
+type GoalStatus =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "EMPLOYEE_SUBMITTED"
+  | "COMPLETED"
+  | "NOT_COMPLETED"
+  | "CANCELLED";
+
+interface Goal {
+  goalId: number;
+  appraisalId: number | null;
+  title: string;
+  status: GoalStatus;
+  dueDate: string | null;
+  employeeCompleted?: boolean;
+  employeeNote?: string;
+}
+
+const statusStyles: Record<GoalStatus, string> = {
+  IN_PROGRESS: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+  NOT_STARTED: "bg-[#2a2d3a] text-[#6b7280] border border-white/[0.06]",
+  EMPLOYEE_SUBMITTED: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
+  COMPLETED: "bg-green-500/10 text-green-400 border border-green-500/20",
+  NOT_COMPLETED: "bg-red-500/10 text-red-400 border border-red-500/20",
+  CANCELLED: "bg-[#2a2d3a] text-[#6b7280] border border-white/[0.06]",
+};
+
+const statusLabel: Record<GoalStatus, string> = {
+  IN_PROGRESS: "In Progress",
+  NOT_STARTED: "Not Started",
+  EMPLOYEE_SUBMITTED: "Submitted",
+  COMPLETED: "Completed",
+  NOT_COMPLETED: "Not Completed",
+  CANCELLED: "Cancelled",
+};
+
+const filters = [
+  "All",
+  "Not Started",
+  "In Progress",
+  "Submitted",
+  "Completed",
+  "Not Completed",
+  "Cancelled",
+];
 
 export default function ManagerMyGoals() {
-  const [goals, setGoals] = useState<Goal[]>(initialGoals);
-  const [activeFilter, setActiveFilter] = useState<"All" | GoalStatus>("All");
+  const managerUserId = Number(localStorage.getItem("userId"));
+
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("All");
   const [updateModal, setUpdateModal] = useState<Goal | null>(null);
   const [completed, setCompleted] = useState<boolean | null>(null);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
-  const filtered = activeFilter === "All" ? goals : goals.filter((g) => g.status === activeFilter);
+  useEffect(() => {
+    if (!managerUserId) return;
+    loadGoals();
+  }, [managerUserId]);
 
-  const totalGoals = goals.length;
-  const completedCount = goals.filter((g) => g.status === "Completed").length;
-  const inProgress = goals.filter((g) => g.status === "In Progress").length;
-  const notStarted = goals.filter((g) => g.status === "Not Started").length;
+  const loadGoals = async () => {
+    setLoading(true);
+    try {
+      // A manager has their own goals as an employee too — same endpoint
+      // as the employee Goals page, keyed off the manager's own userId.
+      const data = await fetchGoalsByEmployee(managerUserId);
+      setGoals(data || []);
+    } catch (e) {
+      console.error("Failed to load goals", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleSubmitUpdate = () => {
+  const getDaysLeft = (dueDate: string | null) => {
+    if (!dueDate) return null;
+    const days = Math.ceil(
+      (new Date(dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+    return days > 0 ? days : null;
+  };
+
+  const handleSubmitUpdate = async () => {
     if (!updateModal || completed === null) return;
     setSubmitting(true);
-    setTimeout(() => {
-      setGoals((prev) =>
-        prev.map((g) =>
-          g.id === updateModal.id
-            ? { ...g, status: completed ? "Completed" : "Not Completed", daysLeft: null }
-            : g
-        )
-      );
+    setError("");
+    try {
+      await submitGoalCompletion(updateModal.goalId, completed, note);
+      await loadGoals();
       setUpdateModal(null);
       setCompleted(null);
       setNote("");
+    } catch {
+      setError("Failed to update goal. Please try again.");
+    } finally {
       setSubmitting(false);
-    }, 800);
+    }
   };
+
+  const filtered =
+    activeFilter === "All"
+      ? goals
+      : goals.filter((g) => statusLabel[g.status] === activeFilter);
+
+  const totalGoals = goals.length;
+  const completedCount = goals.filter((g) => g.status === "COMPLETED").length;
+  const inProgress = goals.filter((g) => g.status === "IN_PROGRESS").length;
+  const notStarted = goals.filter((g) => g.status === "NOT_STARTED").length;
+
+  if (loading) {
+    return (
+      <div className="w-full flex items-center justify-center py-20">
+        <p className="text-[#6b7280] text-sm">Loading goals...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -77,8 +152,13 @@ export default function ManagerMyGoals() {
           { label: "In Progress", value: inProgress, color: "text-blue-400" },
           { label: "Not Started", value: notStarted, color: "text-[#6b7280]" },
         ].map((stat) => (
-          <div key={stat.label} className="bg-[#1e2029] border border-white/[0.06] rounded-xl px-5 py-4">
-            <p className="text-[#6b7280] text-xs uppercase tracking-widest mb-2">{stat.label}</p>
+          <div
+            key={stat.label}
+            className="bg-[#1e2029] border border-white/[0.06] rounded-xl px-5 py-4"
+          >
+            <p className="text-[#6b7280] text-xs uppercase tracking-widest mb-2">
+              {stat.label}
+            </p>
             <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
         ))}
@@ -103,46 +183,69 @@ export default function ManagerMyGoals() {
 
       {/* Goals Table */}
       <div className="bg-[#1e2029] border border-white/[0.06] rounded-xl overflow-hidden">
-        {/* Header */}
         <div className="grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_1fr] px-5 py-3 border-b border-white/[0.06]">
           {["Goal", "Appraisal", "Due Date", "Days Left", "Status", "Action"].map((h) => (
-            <span key={h} className="text-[#6b7280] text-xs uppercase tracking-widest font-medium">{h}</span>
+            <span
+              key={h}
+              className="text-[#6b7280] text-xs uppercase tracking-widest font-medium"
+            >
+              {h}
+            </span>
           ))}
         </div>
 
-        {/* Rows */}
         {filtered.length === 0 ? (
-          <div className="px-5 py-10 text-center text-[#6b7280] text-sm">No goals found.</div>
+          <div className="px-5 py-10 text-center text-[#6b7280] text-sm">
+            No goals found.
+          </div>
         ) : (
-          filtered.map((goal, index) => (
-            <div
-              key={goal.id}
-              className={`grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_1fr] px-5 py-4 items-center hover:bg-white/[0.02] transition-all ${
-                index !== filtered.length - 1 ? "border-b border-white/[0.04]" : ""
-              }`}
-            >
-              <span className="text-white text-sm font-medium">{goal.title}</span>
-              <span className="text-[#6b7280] text-sm">{goal.appraisal}</span>
-              <span className="text-[#6b7280] text-sm">{goal.dueDate}</span>
-              <span className="text-[#9ca3af] text-sm">
-                {goal.daysLeft !== null ? `${goal.daysLeft} days` : "—"}
-              </span>
-              <span>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${statusStyles[goal.status]}`}>
-                  {goal.status}
+          filtered.map((goal, index) => {
+            const daysLeft = getDaysLeft(goal.dueDate);
+            const isDisabled = [
+              "EMPLOYEE_SUBMITTED",
+              "COMPLETED",
+              "CANCELLED",
+              "NOT_COMPLETED",
+            ].includes(goal.status);
+            return (
+              <div
+                key={goal.goalId}
+                className={`grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_1fr] px-5 py-4 items-center hover:bg-white/[0.02] transition-all ${
+                  index !== filtered.length - 1 ? "border-b border-white/[0.04]" : ""
+                }`}
+              >
+                <span className="text-white text-sm font-medium">{goal.title}</span>
+                <span className="text-[#6b7280] text-sm">
+                  {goal.appraisalId ? `Appraisal #${goal.appraisalId}` : "—"}
                 </span>
-              </span>
-              <span>
-                <button
-                  onClick={() => { setUpdateModal(goal); setCompleted(null); setNote(""); }}
-                  disabled={goal.status === "Completed" || goal.status === "Cancelled" || goal.status === "Not Completed"}
-                  className="text-xs font-medium px-4 py-1.5 rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Update
-                </button>
-              </span>
-            </div>
-          ))
+                <span className="text-[#6b7280] text-sm">{goal.dueDate || "—"}</span>
+                <span className="text-[#9ca3af] text-sm">
+                  {daysLeft !== null ? `${daysLeft} days` : "—"}
+                </span>
+                <span>
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-lg ${statusStyles[goal.status]}`}
+                  >
+                    {statusLabel[goal.status] || goal.status}
+                  </span>
+                </span>
+                <span>
+                  <button
+                    onClick={() => {
+                      setUpdateModal(goal);
+                      setCompleted(null);
+                      setNote(goal.employeeNote || "");
+                      setError("");
+                    }}
+                    disabled={isDisabled}
+                    className="text-xs font-medium px-4 py-1.5 rounded-lg border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Update
+                  </button>
+                </span>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -164,8 +267,14 @@ export default function ManagerMyGoals() {
                 }`}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M5 8l2.5 2.5 3.5-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M5 8l2.5 2.5 3.5-4"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
                 Yes, completed
               </button>
@@ -178,8 +287,13 @@ export default function ManagerMyGoals() {
                 }`}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="M5.5 5.5l5 5M10.5 5.5l-5 5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 No, not done
               </button>
@@ -199,8 +313,11 @@ export default function ManagerMyGoals() {
               />
             </div>
 
+            {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+
             <p className="text-[#4b5563] text-xs mb-5">
-              Once submitted, your manager will review and confirm the final status. You can update your response until they finalize it.
+              Once submitted, your manager will review and confirm the final status. You
+              can update your response until they finalize it.
             </p>
 
             {/* Actions */}

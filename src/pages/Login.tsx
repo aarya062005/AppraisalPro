@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import axiosInstance from "../api/axiosInstance";
 
 const BarChartIcon = () => (
   <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -48,17 +48,19 @@ export default function Login() {
     setError("");
 
     try {
-      const response = await axios.post("http://localhost:8080/api/users/login", {
+      const response = await axiosInstance.post("/api/users/login", {
         email,
         password,
       });
 
-      const { userId, firstName, role } = response.data;
+      const { userId, firstName, role, token } = response.data;
 
       // Save to localStorage
       localStorage.setItem("userId", userId);
       localStorage.setItem("firstName", firstName);
       localStorage.setItem("role", role);
+      localStorage.setItem("token", token);           // ← JWT token saved
+      localStorage.setItem("isAuthenticated", "true");
 
       // Redirect based on role
       if (role === "MANAGER") {
@@ -71,7 +73,7 @@ export default function Login() {
 
     } catch (err: any) {
       if (err.response) {
-        setError(err.response.data || "Invalid email or password.");
+        setError(err.response.data?.message || err.response.data || "Invalid email or password.");
       } else {
         setError("Cannot connect to server. Make sure backend is running.");
       }

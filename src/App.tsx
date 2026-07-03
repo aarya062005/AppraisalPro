@@ -25,6 +25,7 @@ import HRAppraisals from "./pages/HR/HRAppraisals";
 import HRCreateAppraisal from "./pages/HR/HRCreateAppraisal";
 import HRReports from "./pages/HR/HRReports";
 import HRProfile from "./pages/HR/HRProfile";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -33,37 +34,43 @@ function App() {
         <Route path="/" element={<Login />} />
 
         {/* Employee Routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/appraisal-guide" element={<AppraisalGuide />} />
-          <Route path="/my-appraisal" element={<MyAppraisals />} />
-          <Route path="/my-appraisal/:id" element={<AppraisalDetail />} />
-          <Route path="/goals" element={<Goals />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/profile" element={<Profile />} />
+        <Route element={<ProtectedRoute allowedRoles={["EMPLOYEE"]} />}>
+          <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/appraisal-guide" element={<AppraisalGuide />} />
+            <Route path="/my-appraisal" element={<MyAppraisals />} />
+            <Route path="/my-appraisal/:id" element={<AppraisalDetail />} />
+            <Route path="/goals" element={<Goals />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/profile" element={<Profile />} />
+          </Route>
         </Route>
 
         {/* Manager Routes */}
-        <Route element={<ManagerLayout />}>
-          <Route path="/manager/dashboard" element={<ManagerDashboard />} />
-          <Route path="/manager/team" element={<MyTeam />} />
-          <Route path="/manager/goals" element={<ManagerGoals />} />
-          <Route path="/manager/team-report" element={<TeamReport />} />
-          <Route path="/manager/my-appraisals" element={<ManagerMyAppraisals />} />
-          <Route path="/manager/my-appraisals/:id" element={<ManagerSelfAssessment />} />
-          <Route path="/manager/my-goals" element={<ManagerMyGoals />} />
-          <Route path="/manager/profile" element={<ManagerProfile />} />
+        <Route element={<ProtectedRoute allowedRoles={["MANAGER"]} />}>
+          <Route element={<ManagerLayout />}>
+            <Route path="/manager/dashboard" element={<ManagerDashboard />} />
+            <Route path="/manager/team" element={<MyTeam />} />
+            <Route path="/manager/goals" element={<ManagerGoals />} />
+            <Route path="/manager/team-report" element={<TeamReport />} />
+            <Route path="/manager/my-appraisals" element={<ManagerMyAppraisals />} />
+            <Route path="/manager/my-appraisals/:id" element={<ManagerSelfAssessment />} />
+            <Route path="/manager/my-goals" element={<ManagerMyGoals />} />
+            <Route path="/manager/profile" element={<ManagerProfile />} />
+          </Route>
         </Route>
 
         {/* HR Routes */}
-        <Route element={<HRLayout />}>
-          <Route path="/hr/dashboard" element={<HRDashboard />} />
-          <Route path="/hr/users" element={<HRUsers />} />
-          <Route path="/hr/departments" element={<HRDepartments />} />
-          <Route path="/hr/appraisals" element={<HRAppraisals />} />
-          <Route path="/hr/create-appraisal" element={<HRCreateAppraisal />} />
-          <Route path="/hr/reports" element={<HRReports />} />
-          <Route path="/hr/profile" element={<HRProfile />} />
+        <Route element={<ProtectedRoute allowedRoles={["HR"]} />}>
+          <Route element={<HRLayout />}>
+            <Route path="/hr/dashboard" element={<HRDashboard />} />
+            <Route path="/hr/users" element={<HRUsers />} />
+            <Route path="/hr/departments" element={<HRDepartments />} />
+            <Route path="/hr/appraisals" element={<HRAppraisals />} />
+            <Route path="/hr/create-appraisal" element={<HRCreateAppraisal />} />
+            <Route path="/hr/reports" element={<HRReports />} />
+            <Route path="/hr/profile" element={<HRProfile />} />
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>

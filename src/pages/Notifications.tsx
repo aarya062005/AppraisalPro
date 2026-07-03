@@ -2,19 +2,41 @@ import { useNotifications } from "../context/NotificationsContext";
 import type { NotificationType } from "../context/NotificationsContext";
 
 const dotColor: Record<NotificationType, string> = {
-  appraisal_cycle: "bg-blue-400",
-  reminder: "bg-amber-400",
-  manager_assigned: "bg-purple-400",
+  CYCLE_STARTED: "bg-blue-400",
+  APPRAISAL_DUE: "bg-amber-400",
+  SELF_ASSESSMENT_SUBMITTED: "bg-purple-400",
+  MANAGER_REVIEW_DONE: "bg-purple-400",
+  APPRAISAL_APPROVED: "bg-green-400",
+  FEEDBACK_RECEIVED: "bg-teal-400",
+  GOAL_ASSIGNED: "bg-amber-400",
+  GOAL_SUBMITTED: "bg-blue-400",
+  GOAL_CONFIRMED: "bg-green-400",
+  GENERAL: "bg-[#9ca3af]",
 };
 
 const typeLabel: Record<NotificationType, string> = {
-  appraisal_cycle: "Appraisal Cycle",
-  reminder: "Reminder",
-  manager_assigned: "Manager Update",
+  CYCLE_STARTED: "Appraisal Cycle",
+  APPRAISAL_DUE: "Reminder",
+  SELF_ASSESSMENT_SUBMITTED: "Self Assessment",
+  MANAGER_REVIEW_DONE: "Manager Review",
+  APPRAISAL_APPROVED: "Appraisal Approved",
+  FEEDBACK_RECEIVED: "Feedback",
+  GOAL_ASSIGNED: "Goal Assigned",
+  GOAL_SUBMITTED: "Goal Submitted",
+  GOAL_CONFIRMED: "Goal Confirmed",
+  GENERAL: "General",
 };
 
 export default function Notifications() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
+
+  if (loading) {
+    return (
+      <div className="w-full flex items-center justify-center h-64">
+        <p className="text-[#6b7280]">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">

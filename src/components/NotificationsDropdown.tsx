@@ -3,9 +3,16 @@ import { useNotifications } from "../context/NotificationsContext";
 import type { NotificationType } from "../context/NotificationsContext";
 
 const dotColor: Record<NotificationType, string> = {
-  appraisal_cycle: "bg-blue-400",
-  reminder: "bg-amber-400",
-  manager_assigned: "bg-purple-400",
+  CYCLE_STARTED: "bg-blue-400",
+  APPRAISAL_DUE: "bg-amber-400",
+  SELF_ASSESSMENT_SUBMITTED: "bg-purple-400",
+  MANAGER_REVIEW_DONE: "bg-purple-400",
+  APPRAISAL_APPROVED: "bg-green-400",
+  FEEDBACK_RECEIVED: "bg-teal-400",
+  GOAL_ASSIGNED: "bg-amber-400",
+  GOAL_SUBMITTED: "bg-blue-400",
+  GOAL_CONFIRMED: "bg-green-400",
+  GENERAL: "bg-[#9ca3af]",
 };
 
 interface NotificationsDropdownProps {
