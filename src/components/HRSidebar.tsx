@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
+import { useNotifications } from "../context/NotificationsContext";
 
 const DashboardIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -47,6 +48,13 @@ const ReportsIcon = () => (
   </svg>
 );
 
+const NotificationsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+    <path d="M9 1.5a5.5 5.5 0 00-5.5 5.5v3l-1.5 2.5h14L14.5 10V7A5.5 5.5 0 009 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M7 13.5a2 2 0 004 0" stroke="currentColor" strokeWidth="1.5"/>
+  </svg>
+);
+
 const ProfileIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
     <circle cx="9" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
@@ -62,17 +70,21 @@ const BarChartIcon = () => (
   </svg>
 );
 
-const navItems = [
-  { label: "Dashboard", icon: <DashboardIcon />, path: "/hr/dashboard" },
-  { label: "Users", icon: <UsersIcon />, path: "/hr/users" },
-  { label: "Departments", icon: <DepartmentsIcon />, path: "/hr/departments" },
-  { label: "Appraisals", icon: <AppraisalsIcon />, path: "/hr/appraisals" },
-  { label: "Create Appraisal", icon: <CreateIcon />, path: "/hr/create-appraisal" },
-  { label: "Reports", icon: <ReportsIcon />, path: "/hr/reports" },
-  { label: "Profile", icon: <ProfileIcon />, path: "/hr/profile" },
-];
-
 export default function HRSidebar() {
+  const { unreadCount } = useNotifications();
+  const firstName = localStorage.getItem("firstName") || "HR";
+
+  const navItems = [
+    { label: "Dashboard",       icon: <DashboardIcon />,     path: "/hr/dashboard" },
+    { label: "Users",           icon: <UsersIcon />,         path: "/hr/users" },
+    { label: "Departments",     icon: <DepartmentsIcon />,   path: "/hr/departments" },
+    { label: "Appraisals",      icon: <AppraisalsIcon />,    path: "/hr/appraisals" },
+    { label: "Create Appraisal",icon: <CreateIcon />,        path: "/hr/create-appraisal" },
+    { label: "Reports",         icon: <ReportsIcon />,       path: "/hr/reports" },
+    { label: "Notifications",   icon: <NotificationsIcon />, path: "/hr/notifications", badge: unreadCount },
+    { label: "Profile",         icon: <ProfileIcon />,       path: "/hr/profile" },
+  ];
+
   return (
     <aside className="w-52 min-h-screen bg-[#1a1c24] border-r border-white/[0.06] flex flex-col py-6 px-3">
       <div className="flex items-center gap-2.5 px-3 mb-8">
@@ -88,7 +100,7 @@ export default function HRSidebar() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 relative
               ${isActive
                 ? "bg-purple-600/20 text-purple-300"
                 : "text-[#6b7280] hover:text-[#9ca3af] hover:bg-white/[0.04]"
@@ -99,6 +111,11 @@ export default function HRSidebar() {
               <>
                 <span className={isActive ? "text-purple-400" : ""}>{item.icon}</span>
                 <span>{item.label}</span>
+                {!!item.badge && (
+                  <span className="ml-auto bg-purple-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {item.badge > 9 ? "9+" : item.badge}
+                  </span>
+                )}
               </>
             )}
           </NavLink>
@@ -106,15 +123,18 @@ export default function HRSidebar() {
       </nav>
 
       <div className="px-3 mt-6">
-        <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-all">
+        <Link
+          to="/hr/profile"
+          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-all"
+        >
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            AH
+            {firstName[0].toUpperCase()}
           </div>
           <div className="flex flex-col">
-            <span className="text-white text-xs font-medium">Admin HR</span>
-            <span className="text-[#6b7280] text-[10px]">Head HR</span>
+            <span className="text-white text-xs font-medium">{firstName}</span>
+            <span className="text-[#6b7280] text-[10px]">HR</span>
           </div>
-        </div>
+        </Link>
       </div>
     </aside>
   );

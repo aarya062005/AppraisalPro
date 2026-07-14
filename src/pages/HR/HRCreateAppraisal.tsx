@@ -46,8 +46,8 @@ export default function HRCreateAppraisal() {
           axiosInstance.get("/api/users"),
           axiosInstance.get("/api/departments"),
         ]);
-        // only employees
-        setEmployees(usersRes.data.filter((u: any) => u.role === "EMPLOYEE"));
+        // include employees AND managers (managers are also appraised by their own manager)
+        setEmployees(usersRes.data.filter((u: any) => u.role === "EMPLOYEE" || u.role === "MANAGER"));
         setDepartments(deptsRes.data);
       } catch (err) {
         setErrorMsg("Failed to load data.");

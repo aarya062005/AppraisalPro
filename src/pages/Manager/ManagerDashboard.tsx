@@ -283,11 +283,7 @@ export default function ManagerDashboard() {
                   </span>
                 </span>
                 <span>
-                  {row.appraisalStatus === "ACKNOWLEDGED" || row.appraisalStatus === "APPROVED" ? (
-                    <button className="text-xs font-medium px-4 py-1.5 rounded-lg border border-white/[0.08] text-[#9ca3af] hover:bg-white/[0.04] transition-all">
-                      View
-                    </button>
-                  ) : row.appraisalStatus === "SELF_SUBMITTED" || row.appraisalStatus === "MANAGER_DRAFT" ? (
+                  {row.appraisalStatus === "SELF_SUBMITTED" || row.appraisalStatus === "MANAGER_DRAFT" ? (
                     <button
                       onClick={() => {
                         setReviewModal(row);
@@ -299,7 +295,10 @@ export default function ManagerDashboard() {
                       Review
                     </button>
                   ) : (
-                    <button className="text-xs font-medium px-4 py-1.5 rounded-lg border border-white/[0.08] text-[#6b7280] cursor-not-allowed opacity-50">
+                    <button
+                      onClick={() => navigate(`/manager/team-appraisal/${row.appraisalId}`)}
+                      className="text-xs font-medium px-4 py-1.5 rounded-lg border border-white/[0.08] text-[#9ca3af] hover:bg-white/[0.04] transition-all"
+                    >
                       View
                     </button>
                   )}

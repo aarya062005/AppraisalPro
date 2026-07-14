@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { useNotifications } from "../context/NotificationsContext";
 
 const DashboardIcon = () => (
@@ -49,14 +49,15 @@ const BarChartIcon = () => (
 
 export default function Sidebar() {
   const { unreadCount } = useNotifications();
+  const firstName = localStorage.getItem("firstName") || "Employee";
 
   const navItems = [
-    { label: "Dashboard", icon: <DashboardIcon />, path: "/dashboard" },
-    { label: "Appraisal Guide", icon: <AppraisalIcon />, path: "/appraisal-guide" },
-    { label: "My Appraisal", icon: <AppraisalIcon />, path: "/my-appraisal" },
-    { label: "Goals", icon: <GoalsIcon />, path: "/goals" },
-    { label: "Notifications", icon: <NotificationsIcon />, path: "/notifications", badge: unreadCount },
-    { label: "Profile", icon: <ProfileIcon />, path: "/profile" },
+    { label: "Dashboard",      icon: <DashboardIcon />,     path: "/dashboard" },
+    { label: "Appraisal Guide",icon: <AppraisalIcon />,     path: "/appraisal-guide" },
+    { label: "My Appraisal",   icon: <AppraisalIcon />,     path: "/my-appraisal" },
+    { label: "Goals",          icon: <GoalsIcon />,         path: "/goals" },
+    { label: "Notifications",  icon: <NotificationsIcon />, path: "/notifications", badge: unreadCount },
+    { label: "Profile",        icon: <ProfileIcon />,       path: "/profile" },
   ];
 
   return (
@@ -89,7 +90,7 @@ export default function Sidebar() {
                 <span>{item.label}</span>
                 {!!item.badge && (
                   <span className="ml-auto bg-purple-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {item.badge}
+                    {item.badge > 9 ? "9+" : item.badge}
                   </span>
                 )}
               </>
@@ -98,16 +99,20 @@ export default function Sidebar() {
         ))}
       </nav>
 
+      {/* Clickable user section → goes to profile */}
       <div className="px-3 mt-6">
-        <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-all">
+        <Link
+          to="/profile"
+          className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-all"
+        >
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            AR
+            {firstName[0].toUpperCase()}
           </div>
           <div className="flex flex-col">
-            <span className="text-white text-xs font-medium">Aarya R.</span>
+            <span className="text-white text-xs font-medium">{firstName}</span>
             <span className="text-[#6b7280] text-[10px]">Employee</span>
           </div>
-        </div>
+        </Link>
       </div>
     </aside>
   );

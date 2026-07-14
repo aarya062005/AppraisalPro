@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axiosInstance from "../../api/axiosInstance";
+import ExcelJS from "exceljs";
 
 // ─── API Calls ───────────────────────────────────────
 const fetchAppraisalsByManager = async (managerId: number) => {
@@ -66,6 +67,7 @@ export default function TeamReport() {
   const [reportLoading, setReportLoading] = useState(false);
   const [allAppraisals, setAllAppraisals] = useState<any[]>([]);
   const [teamMap, setTeamMap] = useState<Record<string, any>>({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!managerId) return;
@@ -151,6 +153,101 @@ export default function TeamReport() {
     c.toLowerCase().includes(search.toLowerCase())
   );
 
+  const HEADER_FILL: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF7C3AED" }, // purple-600
+  };
+  const HEADER_FONT: Partial<ExcelJS.Font> = {
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+
+  const styleHeaderRow = (row: ExcelJS.Row) => {
+    row.eachCell((cell) => {
+      cell.fill = HEADER_FILL;
+      cell.font = HEADER_FONT;
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+    row.height = 20;
+  };
+
+  const handleExportExcel = async () => {
+    if (!selectedCycle || reportRows.length === 0) return;
+    setExporting(true);
+    try {
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "AppraisalPro";
+      wb.created = new Date();
+
+      // ---------- Summary Sheet ----------
+      const summarySheet = wb.addWorksheet("Summary");
+      summarySheet.columns = [
+        { header: "", key: "metric", width: 26 },
+        { header: "", key: "value", width: 20 },
+      ];
+
+      summarySheet.mergeCells("A1:B1");
+      const titleCell = summarySheet.getCell("A1");
+      titleCell.value = `Team Report — ${selectedCycle}`;
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF7C3AED" } };
+      summarySheet.getRow(1).height = 26;
+
+      summarySheet.addRow([]);
+      const metricHeaderRow = summarySheet.addRow(["Metric", "Value"]);
+      styleHeaderRow(metricHeaderRow);
+
+      summarySheet.addRow(["Team Members", reportRows.length]);
+      summarySheet.addRow(["Avg Rating (My Rating)", avgRating]);
+      summarySheet.addRow(["Cycle", selectedCycle]);
+
+      // ---------- Team Members Sheet ----------
+      const teamSheet = wb.addWorksheet("Team Members");
+      teamSheet.columns = [
+        { header: "Employee", key: "name", width: 26 },
+        { header: "Job Title", key: "jobTitle", width: 22 },
+        { header: "Status", key: "status", width: 20 },
+        { header: "Self Rating", key: "selfRating", width: 14 },
+        { header: "My Rating", key: "myRating", width: 14 },
+        { header: "Goals Completed", key: "goalsCompleted", width: 16 },
+        { header: "Total Goals", key: "goalsTotal", width: 14 },
+      ];
+      styleHeaderRow(teamSheet.getRow(1));
+
+      reportRows.forEach((member) => {
+        teamSheet.addRow({
+          name: member.name,
+          jobTitle: member.jobTitle,
+          status: statusLabel[member.appraisalStatus] || member.appraisalStatus,
+          selfRating: member.selfRating > 0 ? member.selfRating : "—",
+          myRating: member.myRating > 0 ? member.myRating : "—",
+          goalsCompleted: member.goals.completed,
+          goalsTotal: member.goals.total,
+        });
+      });
+      teamSheet.autoFilter = { from: "A1", to: "G1" };
+      teamSheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      // ---------- Trigger Download ----------
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Team_Report_${selectedCycle}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="w-full flex items-center justify-center py-20">
@@ -167,46 +264,58 @@ export default function TeamReport() {
         <p className="text-[#6b7280] text-sm mt-1">Performance overview for your team by cycle</p>
       </div>
 
-      {/* Cycle Selector */}
-      <div className="mb-6 relative w-64">
-        <label className="text-[#6b7280] text-xs uppercase tracking-widest mb-2 block">Select Cycle</label>
-        <button
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-          className="w-full bg-[#1e2029] border border-white/[0.06] rounded-xl px-4 py-2.5 text-left text-sm flex items-center justify-between transition-all hover:border-purple-500/30"
-        >
-          <span className={selectedCycle ? "text-white" : "text-[#4b5563]"}>
-            {selectedCycle || "Choose a cycle..."}
-          </span>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M4 6l4 4 4-4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
+      {/* Cycle Selector + Export */}
+      <div className="mb-6 flex items-end justify-between">
+        <div className="relative w-64">
+          <label className="text-[#6b7280] text-xs uppercase tracking-widest mb-2 block">Select Cycle</label>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="w-full bg-[#1e2029] border border-white/[0.06] rounded-xl px-4 py-2.5 text-left text-sm flex items-center justify-between transition-all hover:border-purple-500/30"
+          >
+            <span className={selectedCycle ? "text-white" : "text-[#4b5563]"}>
+              {selectedCycle || "Choose a cycle..."}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
 
-        {dropdownOpen && (
-          <div className="absolute top-full mt-1 w-full bg-[#1e2029] border border-white/[0.08] rounded-xl overflow-hidden z-10 shadow-xl">
-            <div className="px-3 py-2 border-b border-white/[0.06]">
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search cycles..."
-                className="w-full bg-[#16181f] text-white text-sm px-3 py-1.5 rounded-lg outline-none placeholder-[#4b5563]"
-              />
+          {dropdownOpen && (
+            <div className="absolute top-full mt-1 w-full bg-[#1e2029] border border-white/[0.08] rounded-xl overflow-hidden z-10 shadow-xl">
+              <div className="px-3 py-2 border-b border-white/[0.06]">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search cycles..."
+                  className="w-full bg-[#16181f] text-white text-sm px-3 py-1.5 rounded-lg outline-none placeholder-[#4b5563]"
+                />
+              </div>
+              {filteredCycles.length === 0 ? (
+                <p className="text-[#6b7280] text-xs text-center py-3">No cycles found</p>
+              ) : (
+                filteredCycles.map((cycle) => (
+                  <button
+                    key={cycle}
+                    onClick={() => handleCycleSelect(cycle)}
+                    className="w-full text-left px-4 py-2.5 text-sm text-[#9ca3af] hover:bg-white/[0.04] hover:text-white transition-all"
+                  >
+                    {cycle}
+                  </button>
+                ))
+              )}
             </div>
-            {filteredCycles.length === 0 ? (
-              <p className="text-[#6b7280] text-xs text-center py-3">No cycles found</p>
-            ) : (
-              filteredCycles.map((cycle) => (
-                <button
-                  key={cycle}
-                  onClick={() => handleCycleSelect(cycle)}
-                  className="w-full text-left px-4 py-2.5 text-sm text-[#9ca3af] hover:bg-white/[0.04] hover:text-white transition-all"
-                >
-                  {cycle}
-                </button>
-              ))
-            )}
-          </div>
+          )}
+        </div>
+
+        {selectedCycle && reportRows.length > 0 && (
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting}
+            className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {exporting ? "Generating..." : "Download Report (.xlsx)"}
+          </button>
         )}
       </div>
 

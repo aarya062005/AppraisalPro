@@ -11,6 +11,7 @@ import ManagerMyAppraisals from "./pages/Manager/ManagerMyAppraisals";
 import ManagerSelfAssessment from "./pages/Manager/ManagerSelfAssessment";
 import ManagerMyGoals from "./pages/Manager/ManagerMyGoals";
 import ManagerProfile from "./pages/Manager/ManagerProfile";
+import ManagerAppraisalView from "./pages/Manager/ManagerAppraisalView";
 import Dashboard from "./pages/Dashboard";
 import AppraisalGuide from "./pages/AppraisalGuide";
 import MyAppraisals from "./pages/MyAppraisals";
@@ -55,7 +56,9 @@ function App() {
             <Route path="/manager/team-report" element={<TeamReport />} />
             <Route path="/manager/my-appraisals" element={<ManagerMyAppraisals />} />
             <Route path="/manager/my-appraisals/:id" element={<ManagerSelfAssessment />} />
+            <Route path="/manager/team-appraisal/:id" element={<ManagerAppraisalView />} />
             <Route path="/manager/my-goals" element={<ManagerMyGoals />} />
+            <Route path="/manager/notifications" element={<Notifications />} />
             <Route path="/manager/profile" element={<ManagerProfile />} />
           </Route>
         </Route>
@@ -69,6 +72,7 @@ function App() {
             <Route path="/hr/appraisals" element={<HRAppraisals />} />
             <Route path="/hr/create-appraisal" element={<HRCreateAppraisal />} />
             <Route path="/hr/reports" element={<HRReports />} />
+            <Route path="/hr/notifications" element={<Notifications />} />
             <Route path="/hr/profile" element={<HRProfile />} />
           </Route>
         </Route>

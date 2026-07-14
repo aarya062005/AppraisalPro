@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axiosInstance from "../../api/axiosInstance";
+import ExcelJS from "exceljs";
 
 type AppraisalStatus = "PENDING" | "EMPLOYEE_DRAFT" | "SELF_SUBMITTED" | "MANAGER_DRAFT" | "MANAGER_REVIEWED" | "APPROVED" | "ACKNOWLEDGED";
 
@@ -63,6 +64,7 @@ export default function HRReports() {
   const [details, setDetails] = useState<CycleDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const fetchCycles = async () => {
@@ -119,6 +121,138 @@ export default function HRReports() {
     return { dept, employees: deptDetails.length, completed, pending, avgRating: deptAvg, progress };
   });
 
+  const HEADER_FILL: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF7C3AED" }, // purple-600
+  };
+  const HEADER_FONT: Partial<ExcelJS.Font> = {
+    bold: true,
+    color: { argb: "FFFFFFFF" },
+  };
+
+  const styleHeaderRow = (row: ExcelJS.Row) => {
+    row.eachCell((cell) => {
+      cell.fill = HEADER_FILL;
+      cell.font = HEADER_FONT;
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+    row.height = 20;
+  };
+
+  const handleExportExcel = async () => {
+    if (!report) return;
+    setExporting(true);
+    try {
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "AppraisalPro";
+      wb.created = new Date();
+
+      // ---------- Summary Sheet ----------
+      const summarySheet = wb.addWorksheet("Summary");
+      summarySheet.columns = [
+        { header: "", key: "metric", width: 26 },
+        { header: "", key: "value", width: 20 },
+      ];
+
+      summarySheet.mergeCells("A1:B1");
+      const titleCell = summarySheet.getCell("A1");
+      titleCell.value = `Appraisal Report — ${selectedCycle}`;
+      titleCell.font = { bold: true, size: 14, color: { argb: "FF7C3AED" } };
+      summarySheet.getRow(1).height = 26;
+
+      summarySheet.addRow([]);
+      const metricHeaderRow = summarySheet.addRow(["Metric", "Value"]);
+      styleHeaderRow(metricHeaderRow);
+
+      summarySheet.addRow(["Total Appraisals", report.totalAppraisals]);
+      summarySheet.addRow(["Completion", `${report.completion}%`]);
+      summarySheet.addRow(["Pending Action", report.pendingAction]);
+      summarySheet.addRow(["Avg Self Rating", report.avgSelfRating > 0 ? report.avgSelfRating.toFixed(1) : "—"]);
+      summarySheet.addRow(["Avg Manager Rating", report.avgManagerRating > 0 ? report.avgManagerRating.toFixed(1) : "—"]);
+      summarySheet.addRow([]);
+
+      const statusTitleRow = summarySheet.addRow(["Status Breakdown"]);
+      statusTitleRow.font = { bold: true };
+
+      const statusHeaderRow = summarySheet.addRow(["Status", "Count"]);
+      styleHeaderRow(statusHeaderRow);
+
+      ALL_STATUSES.forEach((status) => {
+        summarySheet.addRow([STATUS_LABELS[status], report.statusBreakdown[status] || 0]);
+      });
+
+      // ---------- By Department Sheet ----------
+      const deptSheet = wb.addWorksheet("By Department");
+      deptSheet.columns = [
+        { header: "Department", key: "dept", width: 24 },
+        { header: "Employees", key: "employees", width: 12 },
+        { header: "Completed", key: "completed", width: 12 },
+        { header: "Pending", key: "pending", width: 10 },
+        { header: "Avg Rating", key: "avgRating", width: 12 },
+        { header: "Progress %", key: "progress", width: 12 },
+      ];
+      styleHeaderRow(deptSheet.getRow(1));
+      deptStats.forEach((d) => {
+        deptSheet.addRow({
+          dept: d.dept,
+          employees: d.employees,
+          completed: d.completed,
+          pending: d.pending,
+          avgRating: d.avgRating,
+          progress: d.progress,
+        });
+      });
+      deptSheet.autoFilter = { from: "A1", to: "F1" };
+      deptSheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      // ---------- Full Details Sheet ----------
+      const detailsSheet = wb.addWorksheet("Details");
+      detailsSheet.columns = [
+        { header: "Appraisal ID", key: "appraisalId", width: 14 },
+        { header: "Employee Email", key: "employeeEmail", width: 30 },
+        { header: "Manager Email", key: "managerEmail", width: 30 },
+        { header: "Department", key: "deptName", width: 18 },
+        { header: "Status", key: "status", width: 18 },
+        { header: "Self Rating", key: "selfRating", width: 12 },
+        { header: "Manager Rating", key: "managerRating", width: 14 },
+      ];
+      styleHeaderRow(detailsSheet.getRow(1));
+      details.forEach((d) => {
+        detailsSheet.addRow({
+          appraisalId: d.appraisalId,
+          employeeEmail: d.employeeEmail,
+          managerEmail: d.managerEmail,
+          deptName: d.deptName,
+          status: STATUS_LABELS[d.appraisalStatus],
+          selfRating: d.selfRating || "—",
+          managerRating: d.managerRating || "—",
+        });
+      });
+      detailsSheet.autoFilter = { from: "A1", to: "G1" };
+      detailsSheet.views = [{ state: "frozen", ySplit: 1 }];
+
+      // ---------- Trigger Download ----------
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Appraisal_Report_${selectedCycle}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+      setError("Failed to export report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) return (
     <div className="w-full flex items-center justify-center h-64">
       <p className="text-[#6b7280]">Loading...</p>
@@ -139,16 +273,25 @@ export default function HRReports() {
         <p className="text-[#6b7280] text-sm mt-1">Cycle analytics and performance insights</p>
       </div>
 
-      {/* Cycle Selector */}
-      <div className="mb-6">
-        <label className="text-[#6b7280] text-xs uppercase tracking-widest mb-2 block">Select Cycle</label>
-        <select
-          value={selectedCycle}
-          onChange={(e) => setSelectedCycle(e.target.value)}
-          className="bg-[#1e2029] border border-white/[0.06] text-white text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500/50 transition-all w-48"
+      {/* Cycle Selector + Export */}
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <label className="text-[#6b7280] text-xs uppercase tracking-widest mb-2 block">Select Cycle</label>
+          <select
+            value={selectedCycle}
+            onChange={(e) => setSelectedCycle(e.target.value)}
+            className="bg-[#1e2029] border border-white/[0.06] text-white text-sm rounded-xl px-4 py-2.5 outline-none focus:border-purple-500/50 transition-all w-48"
+          >
+            {cycles.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <button
+          onClick={handleExportExcel}
+          disabled={!report || exporting}
+          className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {cycles.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
+          {exporting ? "Generating..." : "Download Report (.xlsx)"}
+        </button>
       </div>
 
       {report && (

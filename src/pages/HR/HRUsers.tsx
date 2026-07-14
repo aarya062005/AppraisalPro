@@ -28,6 +28,18 @@ interface Manager {
   lastName: string;
 }
 
+interface BulkUploadRowError {
+  rowNumber: number;
+  email: string;
+  reason: string;
+}
+
+interface BulkUploadResult {
+  successCount: number;
+  failureCount: number;
+  errors: BulkUploadRowError[];
+}
+
 const roleStyles: Record<Role, string> = {
   HR: "bg-red-500/10 text-red-400 border border-red-500/20",
   MANAGER: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
@@ -48,6 +60,13 @@ export default function HRUsers() {
     firstName: "", lastName: "", email: "", phone: "",
     role: "EMPLOYEE", designation: "", deptId: "", managerId: "", password: "",
   });
+
+  // ── Bulk upload state ────────────────────────────────────────────────
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkUploadResult | null>(null);
+  const [bulkError, setBulkError] = useState("");
 
   useEffect(() => {
     fetchAll();
@@ -83,6 +102,13 @@ export default function HRUsers() {
   const openAddModal = () => {
     setShowModal(true);
     fetchDeptsAndManagers();
+  };
+
+  const openBulkModal = () => {
+    setBulkFile(null);
+    setBulkResult(null);
+    setBulkError("");
+    setShowBulkModal(true);
   };
 
   const filtered = users.filter((u) => {
@@ -140,6 +166,38 @@ export default function HRUsers() {
     }
   };
 
+  const handleBulkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setBulkError("");
+    setBulkResult(null);
+    if (file && !file.name.toLowerCase().endsWith(".xlsx")) {
+      setBulkError("Please select a .xlsx file.");
+      setBulkFile(null);
+      return;
+    }
+    setBulkFile(file);
+  };
+
+  const handleBulkUpload = async () => {
+    if (!bulkFile) return;
+    setBulkUploading(true);
+    setBulkError("");
+    setBulkResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", bulkFile);
+      const res = await axiosInstance.post("/api/users/bulk-upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setBulkResult(res.data);
+      await fetchAll();
+    } catch (err: any) {
+      setBulkError(err.response?.data?.message || err.response?.data || "Bulk upload failed.");
+    } finally {
+      setBulkUploading(false);
+    }
+  };
+
   if (loading) return (
     <div className="w-full flex items-center justify-center h-64">
       <p className="text-[#6b7280]">Loading...</p>
@@ -160,15 +218,26 @@ export default function HRUsers() {
           <h1 className="text-white text-2xl font-bold tracking-tight">Users</h1>
           <p className="text-[#6b7280] text-sm mt-1">Manage all system users</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-          </svg>
-          Add User
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={openBulkModal}
+            className="flex items-center gap-2 bg-[#1e2029] border border-white/[0.08] hover:bg-white/[0.04] text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12v1.5A1.5 1.5 0 004.5 15h7a1.5 1.5 0 001.5-1.5V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Bulk Upload
+          </button>
+          <button
+            onClick={openAddModal}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+            Add User
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -363,6 +432,112 @@ export default function HRUsers() {
               <button onClick={handleCreate} disabled={creating}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-all disabled:opacity-60">
                 {creating ? "Creating..." : "Create user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Upload Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4 py-6">
+          <div className="bg-[#1e2029] border border-white/[0.08] rounded-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/[0.06]">
+              <div>
+                <h2 className="text-white text-base font-bold">Bulk Upload Employees</h2>
+                <p className="text-[#6b7280] text-xs mt-0.5">
+                  Upload an .xlsx file to create multiple users at once.
+                </p>
+              </div>
+              <button onClick={() => setShowBulkModal(false)} className="text-[#6b7280] hover:text-white">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto px-6 py-4 flex flex-col gap-4">
+              <div className="bg-[#16181f] border border-white/[0.06] rounded-xl p-4">
+                <p className="text-[#9ca3af] text-xs leading-relaxed">
+                  Expected columns, in this order: <span className="text-white">First Name, Last Name, Email, Phone, Role, Designation, Department, Manager Name</span>.
+                  Role must be one of <span className="text-white">EMPLOYEE</span>, <span className="text-white">MANAGER</span>, or <span className="text-white">HR</span>.
+                  Department and Manager Name are matched against existing records — leave blank if not applicable.
+                  Each new employee is emailed a temporary password automatically.
+                </p>
+              </div>
+
+              <a
+                href="/employee_upload_template.xlsx"
+                download
+                className="flex items-center gap-2 text-purple-400 hover:text-purple-300 text-sm font-medium w-fit transition-all"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12v1.5A1.5 1.5 0 004.5 15h7a1.5 1.5 0 001.5-1.5V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Download template (.xlsx)
+              </a>
+
+              <div>
+                <label className="text-[#9ca3af] text-xs mb-1 block">Select file (.xlsx)</label>
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  onChange={handleBulkFileChange}
+                  className="w-full bg-[#16181f] border border-white/[0.06] rounded-xl px-3 py-2 text-white text-sm outline-none file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white file:text-xs file:font-medium hover:file:bg-purple-500 file:cursor-pointer cursor-pointer"
+                />
+              </div>
+
+              {bulkError && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                  <p className="text-red-400 text-sm">{bulkError}</p>
+                </div>
+              )}
+
+              {bulkResult && (
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-3">
+                    <div className="flex-1 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
+                      <p className="text-green-400 text-lg font-bold">{bulkResult.successCount}</p>
+                      <p className="text-green-400/80 text-xs">Created successfully</p>
+                    </div>
+                    <div className="flex-1 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+                      <p className="text-red-400 text-lg font-bold">{bulkResult.failureCount}</p>
+                      <p className="text-red-400/80 text-xs">Failed</p>
+                    </div>
+                  </div>
+
+                  {bulkResult.errors.length > 0 && (
+                    <div className="bg-[#16181f] border border-white/[0.06] rounded-xl max-h-48 overflow-y-auto">
+                      {bulkResult.errors.map((err, i) => (
+                        <div
+                          key={i}
+                          className={`px-4 py-2.5 text-xs flex items-start gap-2 ${
+                            i !== bulkResult.errors.length - 1 ? "border-b border-white/[0.04]" : ""
+                          }`}
+                        >
+                          <span className="text-[#6b7280] flex-shrink-0">Row {err.rowNumber}</span>
+                          <span className="text-[#9ca3af] flex-shrink-0">{err.email || "—"}</span>
+                          <span className="text-red-400">{err.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-white/[0.06]">
+              <button onClick={() => setShowBulkModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-white/[0.08] text-[#9ca3af] text-sm hover:bg-white/[0.04] transition-all">
+                Close
+              </button>
+              <button onClick={handleBulkUpload} disabled={!bulkFile || bulkUploading}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-all disabled:opacity-60">
+                {bulkUploading ? "Uploading..." : "Upload"}
               </button>
             </div>
           </div>
